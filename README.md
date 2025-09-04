@@ -1,4 +1,4 @@
-# @terrakernel/odxproxy-client
+# @terrakernel/odxproxy-client-js
 
 Official JavaScript/TypeScript client for ODXProxy. This SDK provides a simple, typed interface to execute Odoo JSON-RPC operations via the ODXProxy Gateway.
 
