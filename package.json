@@ -1,5 +1,5 @@
 {
-  "name": "@odxproxy/client-js",
+  "name": "@terrakernel/odxproxy-client-js",
   "version": "0.1.0",
   "description": "Official JavaScript/TypeScript client for ODXProxy",
   "main": "dist/index.cjs.js",

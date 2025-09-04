@@ -2,7 +2,7 @@
 
 Official JavaScript/TypeScript client for ODXProxy. This SDK provides a simple, typed interface to execute Odoo JSON-RPC operations via the ODXProxy Gateway.
 
-- Repository package name: `@odxproxy/client`
+- Repository package name: `@terrakernel/odxproxy-client-js`
 - License: MIT
 - Runtime: Node.js 18+
 - Language: TypeScript (bundled to ESM and CJS)

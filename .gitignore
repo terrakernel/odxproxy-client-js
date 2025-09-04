@@ -22,3 +22,6 @@ pnpm-debug.log*
 # Swap/temp files
 *.swp
 *.swo
+
+# junit
+junit.xml
