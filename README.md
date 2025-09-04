@@ -44,17 +44,17 @@ ODXProxy is a gateway that securely exposes Odoo RPC functionality over HTTPS wi
 ## Installation
 
 ```
-npm install @odxproxy/client
+npm install @terrakernel/odxproxy-client-js
 # or
-yarn add @odxproxy/client
+yarn add @terrakernel/odxproxy-client-js
 # or
-pnpm add @odxproxy/client
+pnpm add @terrakernel/odxproxy-client-js
 ```
 
 ## Quick Start
 
 ```ts
-import { init, search_read } from "@odxproxy/client";
+import { init, search_read } from "@terrakernel/odxproxy-client-js";
 
 // Initialize once at app startup
 init({
