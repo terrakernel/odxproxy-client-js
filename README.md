@@ -241,4 +241,4 @@ Outputs are placed under `dist/` and are referenced via `exports` in package.jso
 This package follows semantic versioning when published to npm. Current version is defined in package.json.
 
 ## License
-MIT © 2025 Julian Richie Wajong
+MIT © 2025 TERRAKERNEL PTE. LTD.
