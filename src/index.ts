@@ -1,3 +1,8 @@
+/*
+ * MIT License
+ * Copyright (c) 2025 TERRAKERNEL PTE. LTD.
+ * Author Julian Richie Wajong
+ */
 import {OdxProxyClient, OdxProxyClientInfo, OdxServerResponse, OdxClientRequest, OdxClientKeywordRequest} from "./client";
 import ulid from "ulid";
 export const init = (options: OdxProxyClientInfo) => OdxProxyClient.init(options);

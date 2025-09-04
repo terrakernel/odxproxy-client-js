@@ -19,12 +19,13 @@
   },
   "keywords": [
     "odoo",
+    "odoo-integration",
     "odxproxy",
     "api",
     "sdk",
     "client"
   ],
-  "author": "Your Name",
+  "author": "Julian Richie Wajong <julian.wajong@gmail.com> (https://www.odxproxy.io)",
   "license": "MIT",
   "devDependencies": {
     "@types/jest": "^30.0.0",

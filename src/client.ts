@@ -1,3 +1,8 @@
+/*
+ * MIT License
+ * Copyright (c) 2025 TERRAKERNEL PTE. LTD.
+ * Author Julian Richie Wajong
+ */
 import axios, {AxiosInstance} from "axios";
 
 export interface OdxInstanceInfo{

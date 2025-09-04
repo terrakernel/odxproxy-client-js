@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Run tests
+        env:
+          # Provide dummy env to prevent accidental real calls; tests that hit real services should be conditionally skipped
+          url: ${{secrets.TEST_URL}}
+          db: ${{secrets.TEST_DB}}
+          uid: ${{secrets.TEST_UID}}
+          api_key: ${{secrets.TEST_API_KEY}}
+          odx_api_key: ${{secrets.TEST_ODX_API_KEY}}
+        run: npm test -- --ci --reporters=default --reporters=jest-junit
