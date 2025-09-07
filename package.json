@@ -1,14 +1,14 @@
 {
   "name": "@terrakernel/odxproxy-client-js",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Official JavaScript/TypeScript client for ODXProxy",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "require": "./dist/index.mjs.js"
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
     }
   },
   "scripts": {
@@ -21,9 +21,13 @@
     "odoo",
     "odoo-integration",
     "odxproxy",
+    "odoo-sdk",
+    "odoo-client",
     "api",
     "sdk",
-    "client"
+    "client",
+    "javascript",
+    "typescript"
   ],
   "repository": {
     "type": "git",

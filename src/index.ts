@@ -4,7 +4,7 @@
  * Author Julian Richie Wajong
  */
 import {OdxProxyClient, OdxProxyClientInfo, OdxServerResponse, OdxClientRequest, OdxClientKeywordRequest} from "./client";
-import ulid from "ulid";
+import { ulid } from "ulid";
 export const init = (options: OdxProxyClientInfo) => OdxProxyClient.init(options);
 
 const client = () => OdxProxyClient.getInstance();
@@ -25,7 +25,7 @@ export const search = <T = number>( model: string, params: any[], keyword: OdxCl
         delete kCopy[key as keyof OdxClientKeywordRequest];
     }
     let body: OdxClientRequest = {
-        id: id || ulid.ulid(),
+        id: id || ulid(),
         action: "search",
         model_id: model,
         keyword: kCopy,
@@ -48,7 +48,7 @@ export const search_read = <T = any>( model: string, params: any[], keyword: Odx
     const kCopy = {...keyword};
     const paramsCopy = [...params];
     let body: OdxClientRequest = {
-        id: id || ulid.ulid(),
+        id: id || ulid(),
         action: "search_read",
         model_id: model,
         keyword: kCopy,
@@ -75,7 +75,7 @@ export const read = <T = any>( model: string, params: any[], keyword: OdxClientK
         delete kCopy[key as keyof OdxClientKeywordRequest];
     }
     let body: OdxClientRequest = {
-        id: id || ulid.ulid(),
+        id: id || ulid(),
         action: "read",
         model_id: model,
         keyword: kCopy,
@@ -100,7 +100,7 @@ export const fields_get = <T = any>( model: string, keyword: OdxClientKeywordReq
         delete kCopy[key as keyof OdxClientKeywordRequest];
     }
     let body: OdxClientRequest = {
-        id: id || ulid.ulid(),
+        id: id || ulid(),
         action: "fields_get",
         model_id: model,
         keyword: kCopy,
@@ -128,7 +128,7 @@ export const search_count = <T = number>( model: string, params: any[], keyword:
     }
 
     let body: OdxClientRequest = {
-        id: id || ulid.ulid(),
+        id: id || ulid(),
         action: "search_count",
         model_id: model,
         keyword: kCopy,
@@ -155,7 +155,7 @@ export const create = <T = any>( model: string, params: any[], keyword: OdxClien
         delete kCopy[key as keyof OdxClientKeywordRequest];
     }
     let body: OdxClientRequest = {
-        id: id || ulid.ulid(),
+        id: id || ulid(),
         action: "create",
         model_id: model,
         keyword: kCopy,
@@ -182,7 +182,7 @@ export const remove = <T = any>( model: string, params: any[], keyword: OdxClien
         delete kCopy[key as keyof OdxClientKeywordRequest];
     }
     let body: OdxClientRequest = {
-        id: id || ulid.ulid(),
+        id: id || ulid(),
         action: "unlink",
         model_id: model,
         keyword: kCopy,
@@ -209,7 +209,7 @@ export const update = <T = any>( model: string, params: any[], keyword: OdxClien
         delete kCopy[key as keyof OdxClientKeywordRequest];
     }
     let body: OdxClientRequest = {
-        id: id || ulid.ulid(),
+        id: id || ulid(),
         action: "write",
         model_id: model,
         keyword: kCopy,
@@ -237,7 +237,7 @@ export const call_method = <T = any>( model: string, params: any[], keyword: Odx
         delete kCopy[key as keyof OdxClientKeywordRequest];
     }
     let body: OdxClientRequest = {
-        id: id || ulid.ulid(),
+        id: id || ulid(),
         action: "call_method",
         model_id: model,
         keyword: kCopy,
