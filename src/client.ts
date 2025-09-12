@@ -39,7 +39,7 @@ export interface OdxServerResponse{
 
 export interface OdxClientKeywordRequest{
     fields?: string[];
-    sort?: string;
+    order?: string;
     limit?: number;
     offset?: number;
     context: OdxClientRequestContext;
