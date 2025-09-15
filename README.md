@@ -21,7 +21,7 @@ Official JavaScript/TypeScript client for ODXProxy. This SDK provides a simple, 
   - fields_get
   - search_count
   - create
-  - update
+  - write
   - remove
   - call_method
 - Error Handling
@@ -38,7 +38,7 @@ ODXProxy is a gateway that securely exposes Odoo RPC functionality over HTTPS wi
 - Friendly, typed wrapper around ODXProxy endpoints
 - Supports both ESM and CommonJS
 - Works with TypeScript out of the box (bundled type definitions)
-- Covers common Odoo actions: search, search_read, read, fields_get, search_count, create, write (update), unlink (remove), and call_method
+- Covers common Odoo actions: search, search_read, read, fields_get, search_count, create, write, unlink (remove), and call_method
 - Request IDs are auto-generated with ULID (can be overridden)
 
 ## Installation
@@ -155,7 +155,7 @@ All functions return a promise resolving to:
   - params: array with a single object of field values (e.g., [{ name: "Acme" }])
   - returns: result?: T (typically new record ID)
 
-- update<T = any>(model, params, keyword, id?)
+- write<T = any>(model, params, keyword, id?)
   - params: [[ids], { field: value }]
   - returns: result?: T
 
@@ -201,12 +201,12 @@ const res = await search_read<{ id: number; name?: string; email?: string }>(
 console.log(res.result);
 ```
 
-- Create, update, remove:
+- Create, write, remove:
 
 ```ts
 const created = await create<number>("res.partner", [{ name: "Acme" }], { context: { tz: "UTC" } });
 const id = created.result!;
-await update("res.partner", [[id], { name: "ACME Updated" }], { context: { tz: "UTC" } });
+await write("res.partner", [[id], { name: "ACME Updated" }], { context: { tz: "UTC" } });
 await remove("res.partner", [[id]], { context: { tz: "UTC" } });
 ```
 
