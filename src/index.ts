@@ -202,7 +202,7 @@ export const remove = <T = any>( model: string, params: any[], keyword: OdxClien
  * @param {string} [id] - Optional request ID; if not provided, a ULID will be generated.
  * @returns {Promise<OdxServerResponse & {result?: T}>} Promise resolving to the Odoo server response indicating update result.
  */
-export const update = <T = any>( model: string, params: any[], keyword: OdxClientKeywordRequest, id?: string): Promise<OdxServerResponse & {result?: T}> => {
+export const write = <T = any>( model: string, params: any[], keyword: OdxClientKeywordRequest, id?: string): Promise<OdxServerResponse & {result?: T}> => {
     const paramsCopy = [...params];
     const kCopy = {...keyword};
     for (const key of ["sort", "limit", "offset", "fields"]) {
@@ -218,6 +218,12 @@ export const update = <T = any>( model: string, params: any[], keyword: OdxClien
     };
     return client().postRequest(body)
 }
+
+
+/**
+ * @deprecated Use {@link write} instead.
+ */
+export const update = write
 
 
 /**

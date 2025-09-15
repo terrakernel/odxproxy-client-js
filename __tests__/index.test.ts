@@ -7,7 +7,7 @@ import {
     search_count,
     create,
     remove,
-    update,
+    write,
     call_method, init,
 } from "../src/index";
 import {OdxProxyClientInfo} from "../src/client";
@@ -81,9 +81,9 @@ describe("All methods test", () => {
         createdRecord = res.result;
     }, 30000);
 
-    it("update", async () => {
+    it("write", async () => {
         if (createdRecord) {
-            const res = await update("res.partner", [[createdRecord], {name: "ACME Updated"}], {context: {tz: "Asia/Jakarta"}})
+            const res = await write("res.partner", [[createdRecord], {name: "ACME Updated"}], {context: {tz: "Asia/Jakarta"}})
             expect(res.jsonrpc).toBe("2.0");
         } else {
             expect(true).toBe(false);
