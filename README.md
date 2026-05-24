@@ -149,15 +149,15 @@ Each data function also accepts an optional trailing `opts?: OdxRequestOptions` 
 
 - search_read<T = any>(model, params, keyword, id?)
   - params: domain array
-  - keyword: can include fields, limit, offset, sort, and context
+  - keyword: can include fields, limit, offset, order, and context
   - returns: result?: T[] (records)
 
 - read<T = any>(model, params, keyword, id?)
-  - params: array of record IDs wrapped (e.g., [[1,2,3]])
-  - returns: result?: T
+  - params: record IDs, with the field list passed positionally (e.g., [[1,2,3], ["name","email"]]); fields in `keyword` are ignored for read
+  - returns: result?: T (array of records)
 
 - fields_get<T = any>(model, keyword, id?)
-  - returns: result?: T[] (field metadata)
+  - returns: result?: T (object keyed by field name → field metadata)
 
 - search_count<T = number>(model, params, keyword, id?)
   - returns: result?: T (count)
