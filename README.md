@@ -4,7 +4,8 @@ Official JavaScript/TypeScript client for ODXProxy. This SDK provides a simple, 
 
 - Repository package name: `@terrakernel/odxproxy-client-js`
 - License: MIT
-- Runtime: Node.js 18+
+- Runtime: Node.js 18+ (uses the global `fetch`) or any modern browser
+- Dependencies: none at runtime
 - Language: TypeScript (bundled to ESM and CJS)
 
 ## Table of Contents
@@ -36,10 +37,13 @@ ODXProxy is a gateway that securely exposes Odoo RPC functionality over HTTPS wi
 
 ## Features
 - Friendly, typed wrapper around ODXProxy endpoints
+- **Zero runtime dependencies** — built on the platform `fetch`, runs in Node 18+ and the browser
 - Supports both ESM and CommonJS
 - Works with TypeScript out of the box (bundled type definitions)
 - Covers common Odoo actions: search, search_read, read, fields_get, search_count, create, write, unlink (remove), and call_method
-- Request IDs are auto-generated with ULID (can be overridden)
+- Auxiliary endpoints: version, about, license, metrics
+- Typed errors (`OdxError` and subclasses) thrown for every failure
+- Request IDs are auto-generated (UUID via `crypto.randomUUID`, can be overridden)
 
 ## Installation
 
@@ -92,6 +96,7 @@ init({
   },
   odx_api_key: "your-odxproxy-gateway-api-key", // ODXProxy Gateway API key
   gateway_url: "https://gateway.odxproxy.io",    // Optional. Default shown (trailing slash trimmed)
+  default_timeout_secs: 15,                      // Optional. Upstream Odoo timeout (sent as x-request-timeout)
 });
 ```
 
@@ -105,29 +110,35 @@ Context (passed inside `keyword`) supports:
     "allowed_company_ids": [1]
   },
   "fields": ["name", "email"],
-  "sort": "name asc",
+  "order": "name asc",
   "limit": 10,
   "offset": 0
 }
 ```
 
-Note: For actions that do not use fields/sort/limit/offset, the client will strip those keys before sending.
+Note: For actions other than `search_read`, the client strips `fields`/`order`/`limit`/`offset` before sending (they only apply to a combined search+read). The sort key is `order` (Odoo's `execute_kw` keyword).
+
+Every helper also accepts an optional trailing `opts` argument for per-call control:
+
+```ts
+await search_read("res.partner", domain, keyword, /* id */ undefined, {
+  timeoutSecs: 60,         // overrides default_timeout_secs for this call (x-request-timeout)
+  signal: ac.signal,       // AbortController signal for cancellation
+});
+```
 
 ## API Reference
-All functions return a promise resolving to:
+On success, data functions resolve to the JSON-RPC envelope (failures are **thrown** as `OdxError` — see Error Handling):
 
 ```
 {
   jsonrpc: string;        // typically "2.0"
-  id: string;             // request id (ULID by default)
-  result?: any;           // present on success
-  error?: {               // present on error
-    code: number;
-    message: string;
-    data: any;
-  };
+  id: string;             // request id (UUID by default)
+  result?: any;           // the Odoo result
 }
 ```
+
+Each data function also accepts an optional trailing `opts?: OdxRequestOptions` ({ timeoutSecs?, signal? }) after `id`.
 
 - init(options)
   - Initializes the singleton client. Must be called before any other function.
@@ -138,15 +149,15 @@ All functions return a promise resolving to:
 
 - search_read<T = any>(model, params, keyword, id?)
   - params: domain array
-  - keyword: can include fields, limit, offset, sort, and context
+  - keyword: can include fields, limit, offset, order, and context
   - returns: result?: T[] (records)
 
 - read<T = any>(model, params, keyword, id?)
-  - params: array of record IDs wrapped (e.g., [[1,2,3]])
-  - returns: result?: T
+  - params: record IDs, with the field list passed positionally (e.g., [[1,2,3], ["name","email"]]); fields in `keyword` are ignored for read
+  - returns: result?: T (array of records)
 
 - fields_get<T = any>(model, keyword, id?)
-  - returns: result?: T[] (field metadata)
+  - returns: result?: T (object keyed by field name → field metadata)
 
 - search_count<T = number>(model, params, keyword, id?)
   - returns: result?: T (count)
@@ -168,19 +179,44 @@ All functions return a promise resolving to:
   - returns: result?: T
 
 ## Error Handling
-The client normalizes errors from Axios into a consistent structure. Timeouts (default 45s) surface as:
+Every failure is **thrown** as a typed error — proxy-level failures (non-2xx) *and* Odoo logic errors (an `error` body on a `200`). On success the helper resolves to the envelope with `result` set. Use a single `try/catch`:
 
-```
-{ code: 408, message: "Request Timeout: exceeded client limit of 45000ms", data: null }
+```ts
+import { search_read, AuthError, OdooLogicError, OdxError } from "@terrakernel/odxproxy-client-js";
+
+try {
+  const res = await search_read("res.partner", [[]], { context: { tz: "UTC" } });
+  console.log(res.result);
+} catch (err) {
+  if (err instanceof AuthError) { /* bad x-api-key */ }
+  else if (err instanceof OdooLogicError) { /* Odoo validation/access error */ }
+  else if (err instanceof OdxError) { console.error(err.code, err.message, err.data, err.httpStatus); }
+}
 ```
 
-For other HTTP errors, you will receive:
+All errors extend `OdxError` and carry the JSON-RPC `code`, `message`, `data`, and the raw `httpStatus`. Subclasses map to the proxy's error catalog:
 
-```
-{ code: number, message: string, data: any }
-```
+| Class | code | When |
+|---|---|---|
+| `AuthError` | -32000 | Missing/wrong `x-api-key` |
+| `InvalidActionError` | -32001 | Action not allowed |
+| `MissingFnNameError` | -32002 | `call_method` without `fn_name` (also raised client-side) |
+| `OdooTimeoutError` | -32003 | Upstream Odoo timeout (also on client-side abort) |
+| `OdooConnectError` | -32004 | Network failure reaching Odoo |
+| `InternalProxyError` | -32005 | Internal proxy error |
+| `LicenseError` | 0 | Proxy license expired/invalid (HTTP 403) |
+| `OdooLogicError` | *Odoo's code* | Odoo-side logic error returned on a 200 |
 
-Wrap calls in try/catch if you prefer exceptions, or check for `error` on the returned object if you treat it as a value.
+## Auxiliary endpoints
+
+```ts
+import { version, about, license, metrics } from "@terrakernel/odxproxy-client-js";
+
+await version("https://your-odoo.example.com"); // Odoo version banner (no Odoo creds needed)
+await about();    // { jsonrpc, id, result: { build, version } }
+await license();  // { licensee, valid_until, is_valid } — flat object, not an envelope
+await metrics();  // Prometheus metrics as a string
+```
 
 ## Examples
 - Search partners (IDs only):
@@ -217,16 +253,18 @@ await call_method("account.move", [[5]], { context: { tz: "UTC" } }, "action_pos
 ```
 
 ## Testing
-This repo uses Jest. You can run tests locally (requires valid environment variables to hit a real ODXProxy/Odoo instance):
+This repo uses Jest with two suites:
+
+- **Unit tests** (`__tests__/unit.test.ts`) mock `fetch` and need no credentials — run them anytime.
+- **Integration tests** (`__tests__/index.test.ts`) hit a real ODXProxy/Odoo instance and are **skipped unless `url` and `odx_api_key` are set**.
 
 ```
-npm test
+npm test                # both suites (integration skipped without creds)
+npx jest unit.test.ts   # unit tests only
 ```
 
-Environment variables used in tests:
+Environment variables for the integration suite (loaded from `.env` by `jest.setup.ts`):
 - url, db, uid, api_key, odx_api_key
-
-You can define them in a local .env and load with dotenv in your test runner setup if desired.
 
 ## Build
 Build the package (generates ESM, CJS, and type definitions):

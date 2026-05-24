@@ -25,3 +25,5 @@ pnpm-debug.log*
 
 # junit
 junit.xml
+
+SYSTEM_ARCHITECTURE.md
