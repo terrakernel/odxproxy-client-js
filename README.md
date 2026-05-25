@@ -182,19 +182,21 @@ Each data function also accepts an optional trailing `opts?: OdxRequestOptions` 
 Every failure is **thrown** as a typed error — proxy-level failures (non-2xx) *and* Odoo logic errors (an `error` body on a `200`). On success the helper resolves to the envelope with `result` set. Use a single `try/catch`:
 
 ```ts
-import { search_read, AuthError, OdooLogicError, OdxError } from "@terrakernel/odxproxy-client-js";
+import { search_read, AuthError, OdooLogicError, OdooTimeoutError, OdxError } from "@terrakernel/odxproxy-client-js";
 
 try {
   const res = await search_read("res.partner", [[]], { context: { tz: "UTC" } });
   console.log(res.result);
 } catch (err) {
-  if (err instanceof AuthError) { /* bad x-api-key */ }
+  if (err instanceof AuthError) { /* bad x-api-key — reauth */ }
   else if (err instanceof OdooLogicError) { /* Odoo validation/access error */ }
+  else if (err instanceof OdooTimeoutError) { /* upstream timed out — retry/backoff */ }
   else if (err instanceof OdxError) { console.error(err.code, err.message, err.data, err.httpStatus); }
+  else { throw err; } // not from this SDK (e.g. a caller-initiated AbortError) — propagate
 }
 ```
 
-All errors extend `OdxError` and carry the JSON-RPC `code`, `message`, `data`, and the raw `httpStatus`. Subclasses map to the proxy's error catalog:
+All errors extend `OdxError` and carry the JSON-RPC `code`, `message`, `data`, and the raw `httpStatus`. Note that `code` is the **JSON-RPC code** (the values below), *not* the HTTP status — that's on `httpStatus`. Subclasses map to the proxy's error catalog:
 
 | Class | code | When |
 |---|---|---|
@@ -206,6 +208,11 @@ All errors extend `OdxError` and carry the JSON-RPC `code`, `message`, `data`, a
 | `InternalProxyError` | -32005 | Internal proxy error |
 | `LicenseError` | 0 | Proxy license expired/invalid (HTTP 403) |
 | `OdooLogicError` | *Odoo's code* | Odoo-side logic error returned on a 200 |
+
+Two behaviors worth knowing:
+
+- **Caller-initiated aborts are not wrapped.** If you pass your own `opts.signal` and abort it, the original `AbortError` propagates unchanged — only the client's *own* timeout becomes an `OdooTimeoutError`. So an `instanceof OdxError` branch that re-throws everything else (as above) is the correct shape when you use cancellation.
+- **`MissingFnNameError` from `call_method` is a rejected promise, not a synchronous throw.** It's raised client-side before any network call, but via `Promise.reject`, so it's still caught by a `try/catch` around `await` (or a `.catch()`) — just don't expect it to throw before the `await`.
 
 ## Auxiliary endpoints
 
