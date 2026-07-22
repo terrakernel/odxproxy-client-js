@@ -43,7 +43,7 @@
   "bugs": {
     "url": "https://github.com/terrakernel/odxproxy-client-js/issues"
   },
-  "homepage": "https://github.com/terrakernel/odxproxy-client-js#readme",
+  "homepage": "https://odxproxy.io",
   "author": "Julian Richie Wajong <julian.wajong@gmail.com> (https://www.odxproxy.io)",
   "license": "MIT",
   "devDependencies": {
