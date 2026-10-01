@@ -1,6 +1,6 @@
 {
   "name": "@terrakernel/odxproxy-client-js",
-  "version": "0.1.8",
+  "version": "0.9.0",
   "description": "Official JavaScript/TypeScript client for ODXProxy",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
