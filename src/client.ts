@@ -11,12 +11,28 @@ export interface OdxInstanceInfo{
     api_key: string;
 }
 
+/**
+ * Odoo context for v2 calls (sent as `kwargs.context`). Common keys are typed; any
+ * other Odoo context key is allowed.
+ */
+export interface OdxContext {
+    lang?: string;
+    tz?: string;
+    allowed_company_ids?: number[];
+    [key: string]: any;
+}
+
 export interface OdxProxyClientInfo{
     instance: OdxInstanceInfo;
     odx_api_key: string
     gateway_url?: string;
     /** Default upstream Odoo timeout in seconds, sent as the `x-request-timeout` header. */
     default_timeout_secs?: number;
+    /**
+     * v2 only. Context merged into every v2 call; the call's own `context` keys win.
+     * Odoo applies no company selection unless `allowed_company_ids` is sent.
+     */
+    default_context?: OdxContext;
 }
 
 export interface OdxClientRequestContext{
@@ -54,6 +70,19 @@ export interface OdxClientRequest {
     fn_name?: string,
     params: any[],
     odoo_instance: OdxInstanceInfo
+}
+
+/**
+ * Body of `POST /v2/odoo/execute` (SYSTEM_ARCHITECTURE §4.6). `kwargs` is forwarded
+ * verbatim to Odoo's JSON-2 API as named arguments. There is no `user_id`, because
+ * JSON-2 derives the user from the API key.
+ */
+export interface OdxV2Request {
+    id: string;
+    model_id: string;
+    method: string;
+    kwargs: Record<string, any>;
+    odoo_instance: { url: string; db: string; api_key: string };
 }
 
 /** Flat object returned by `GET /_/license` (NOT a JSON-RPC envelope). */
@@ -106,8 +135,34 @@ export class OdooConnectError extends OdxError {}
 export class InternalProxyError extends OdxError {}
 /** 0 / 403 — the proxy's license is expired or invalid. */
 export class LicenseError extends OdxError {}
+/** -32006 / 200 — v2 only: no JSON-2 on that Odoo (18 or older, use v1), or the database is not selectable on that host (`dbfilter`). */
+export class Json2UnavailableError extends OdxError {}
+/** -32007 / 400 — v2 only: `model_id`/`method` is not an Odoo identifier, or `db`/`api_key` cannot be an HTTP header. Odoo was not contacted. */
+export class InvalidRequestError extends OdxError {}
+
 /** Odoo's own error code / 200 — an Odoo-side logic error (validation, access, etc.). */
-export class OdooLogicError extends OdxError {}
+export class OdooLogicError extends OdxError {
+    /** Odoo's exception class (e.g. `odoo.exceptions.ValidationError`), from `data.name`, when present. */
+    get odooErrorName(): string | undefined {
+        return typeof this.data?.name === "string" ? this.data.name : undefined;
+    }
+}
+
+// Subclasses of OdooLogicError keyed by the upstream Odoo HTTP status the proxy forwards
+// as `code` (always on v2; on v1 only when Odoo itself answered non-2xx). Existing
+// `instanceof OdooLogicError` checks keep catching all of them.
+/** 401 on a 200 — Odoo rejected the API key: invalid, expired, wrong scope, or a password (v2 needs an API key). */
+export class OdooAuthError extends OdooLogicError {}
+/** 403 on a 200 — access rights, or a private (`_`-prefixed) method. */
+export class OdooAccessError extends OdooLogicError {}
+/** 404 on a 200 — unknown model/method, or the record does not exist. */
+export class OdooNotFoundError extends OdooLogicError {}
+/** 409 on a 200 — Odoo lock conflict; safe to retry with backoff. */
+export class OdooConflictError extends OdooLogicError {}
+/** 422 on a 200 — validation/user error, or bad arguments (unknown kwarg, `ids` on an `@api.model` method). */
+export class OdooValidationError extends OdooLogicError {}
+/** 5xx on a 200 — Odoo server error. */
+export class OdooServerError extends OdooLogicError {}
 
 /** Maps a (jsonrpc code, http status) pair to the appropriate typed error. */
 function makeError(code: number, message: string, data: any, httpStatus: number): OdxError {
@@ -118,12 +173,25 @@ function makeError(code: number, message: string, data: any, httpStatus: number)
         case -32003: return new OdooTimeoutError(code, message, data, httpStatus);
         case -32004: return new OdooConnectError(code, message, data, httpStatus);
         case -32005: return new InternalProxyError(code, message, data, httpStatus);
+        case -32006: return new Json2UnavailableError(code, message, data, httpStatus);
+        case -32007: return new InvalidRequestError(code, message, data, httpStatus);
         case 0:
             if (httpStatus === 403) return new LicenseError(code, message, data, httpStatus);
             break;
     }
     // A 200 carrying an error object is always an Odoo-side logic error (passthrough code).
-    if (httpStatus === 200) return new OdooLogicError(code, message, data, httpStatus);
+    // Only on a 200: a non-2xx 422 is the proxy rejecting the request body, not Odoo.
+    if (httpStatus === 200) {
+        switch (code) {
+            case 401: return new OdooAuthError(code, message, data, httpStatus);
+            case 403: return new OdooAccessError(code, message, data, httpStatus);
+            case 404: return new OdooNotFoundError(code, message, data, httpStatus);
+            case 409: return new OdooConflictError(code, message, data, httpStatus);
+            case 422: return new OdooValidationError(code, message, data, httpStatus);
+        }
+        if (code >= 500 && code <= 599) return new OdooServerError(code, message, data, httpStatus);
+        return new OdooLogicError(code, message, data, httpStatus);
+    }
     return new OdxError(code, message, data, httpStatus);
 }
 
@@ -155,6 +223,7 @@ export class OdxProxyClient {
     private gatewayUrl: string;
     private apiKey: string;
     private defaultTimeoutSecs?: number;
+    private defaultContext?: OdxContext;
 
     private constructor(options: OdxProxyClientInfo) {
         this.OdooInstance = options.instance;
@@ -165,6 +234,7 @@ export class OdxProxyClient {
         this.gatewayUrl = gatewayUrl;
         this.apiKey = options.odx_api_key;
         this.defaultTimeoutSecs = options.default_timeout_secs;
+        this.defaultContext = options.default_context;
     }
 
     static init(options: OdxProxyClientInfo){
@@ -202,6 +272,25 @@ export class OdxProxyClient {
         return this.envelopeOrThrow(res, raw) as OdxServerResponse & {result?: T};
     }
 
+    /**
+     * v2 RPC entry point — `POST /v2/odoo/execute` (Odoo JSON-2, Odoo 19+). Same
+     * envelope and error rule as {@link postRequest}.
+     */
+    async postV2Request<T = any>(request: OdxV2Request, opts?: OdxRequestOptions): Promise<OdxServerResponse & {result?: T}> {
+        const { res, raw } = await this.send("POST", "/v2/odoo/execute", request, true, opts);
+        return this.envelopeOrThrow(res, raw) as OdxServerResponse & {result?: T};
+    }
+
+    /**
+     * Odoo version over JSON-2 — `POST /v2/odoo/version`. The result is
+     * `{version_info, version}`, a different shape from {@link version}'s.
+     */
+    async versionV2<T = any>(url: string, id?: string, opts?: OdxRequestOptions): Promise<OdxServerResponse & {result?: T}> {
+        const reqId = id || newRequestId();
+        const { res, raw } = await this.send("POST", "/v2/odoo/version", { id: reqId, url }, true, opts);
+        return this.envelopeOrThrow(res, raw) as OdxServerResponse & {result?: T};
+    }
+
     /** Build info — `GET /_/about`. No API key required. */
     async about(opts?: OdxRequestOptions): Promise<OdxServerResponse> {
         const { res, raw } = await this.send("GET", "/_/about", undefined, false, opts);
@@ -228,6 +317,10 @@ export class OdxProxyClient {
 
     getOdooInstance(): OdxInstanceInfo {
         return this.OdooInstance;
+    }
+
+    getDefaultContext(): OdxContext | undefined {
+        return this.defaultContext;
     }
 
     /** Performs the fetch with timeout/abort handling and reads the body once. */

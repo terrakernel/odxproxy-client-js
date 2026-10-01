@@ -26,7 +26,21 @@ export type {
     OdxClientKeywordRequest,
     OdxRequestOptions,
     OdxLicenseInfo,
+    OdxContext,
+    OdxV2Request,
 } from "./client";
+export type {
+    OdxV2RequestOptions,
+    OdxDomain,
+    OdxValues,
+    OdxV2ContextArgs,
+    OdxV2SearchArgs,
+    OdxV2SearchReadArgs,
+    OdxV2SearchCountArgs,
+    OdxV2ReadArgs,
+    OdxV2FieldsGetArgs,
+    OdxV2VersionInfo,
+} from "./v2";
 export {
     OdxProxyClient,
     OdxError,
@@ -38,8 +52,19 @@ export {
     InternalProxyError,
     LicenseError,
     OdooLogicError,
+    Json2UnavailableError,
+    InvalidRequestError,
+    OdooAuthError,
+    OdooAccessError,
+    OdooNotFoundError,
+    OdooConflictError,
+    OdooValidationError,
+    OdooServerError,
     newRequestId,
 } from "./client";
+
+/** v2 helpers (Odoo JSON-2, Odoo 19+) — see `src/v2.ts`. Same `init()` singleton as the v1 helpers. */
+export * as v2 from "./v2";
 
 export const init = (options: OdxProxyClientInfo) => OdxProxyClient.init(options);
 

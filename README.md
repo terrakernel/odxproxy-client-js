@@ -25,6 +25,7 @@ Official JavaScript/TypeScript client for ODXProxy. This SDK provides a simple, 
   - write
   - remove
   - call_method
+- v2 API (Odoo 19+, JSON-2)
 - Error Handling
 - Examples
 - Testing
@@ -41,6 +42,7 @@ ODXProxy is a gateway that securely exposes Odoo RPC functionality over HTTPS wi
 - Supports both ESM and CommonJS
 - Works with TypeScript out of the box (bundled type definitions)
 - Covers common Odoo actions: search, search_read, read, fields_get, search_count, create, write, unlink (remove), and call_method
+- **v2 API** (`v2.*`) for Odoo 19+ over Odoo's JSON-2: named arguments, typed Odoo errors, ready for Odoo 22 (which removes the legacy `/jsonrpc` that v1 uses)
 - Auxiliary endpoints: version, about, license, metrics
 - Typed errors (`OdxError` and subclasses) thrown for every failure
 - Request IDs are auto-generated (UUID via `crypto.randomUUID`, can be overridden)
@@ -97,6 +99,7 @@ init({
   odx_api_key: "your-odxproxy-gateway-api-key", // ODXProxy Gateway API key
   gateway_url: "https://gateway.odxproxy.io",    // Optional. Default shown (trailing slash trimmed)
   default_timeout_secs: 15,                      // Optional. Upstream Odoo timeout (sent as x-request-timeout)
+  default_context: { lang: "en_US", tz: "UTC", allowed_company_ids: [1] }, // Optional. v2 only: merged into every v2 call
 });
 ```
 
@@ -178,6 +181,68 @@ Each data function also accepts an optional trailing `opts?: OdxRequestOptions` 
   - params: method parameters array
   - returns: result?: T
 
+## v2 API (Odoo 19+, JSON-2)
+
+ODXProxy 0.9.0 added `/v2` endpoints that reach Odoo over its **JSON-2** API instead of the legacy `/jsonrpc`. The SDK exposes them as the `v2` namespace, on the same `init()` and the same bound Odoo instance:
+
+```ts
+import { init, v2 } from "@terrakernel/odxproxy-client-js";
+
+init({
+  instance: { url: "https://erp.example.com", db: "prod", user_id: 2, api_key: "<odoo api key>" },
+  odx_api_key: "<proxy key>",
+  default_context: { lang: "en_US", tz: "Asia/Jakarta", allowed_company_ids: [1] },
+});
+
+const partners = await v2.search_read<{ id: number; name: string }>("res.partner", {
+  domain: [["is_company", "=", true]],
+  fields: ["name"],
+  limit: 10,
+});
+
+const ids = await v2.create("res.partner", [{ name: "Acme" }, { name: "Globex" }]); // result: [41, 42]
+const one = await v2.create_one("res.partner", { name: "Initech" });               // result: 43
+await v2.write("res.partner", ids.result!, { comment: "via v2" });
+await v2.remove("res.partner", ids.result!);
+
+await v2.call_method("account.move", "action_post", { ids: [7] });
+await v2.call_method("res.partner", "name_search", { name: "Acm", limit: 5 });
+```
+
+**When to use which:**
+- Odoo **19–21** supports v1 and v2.
+- Odoo **22+** supports only v2.
+- Odoo **≤18** supports only v1.
+
+v1 is not deprecated. `await v2.is_supported()` checks the bound instance once and caches the answer.
+
+**How v2 differs from v1:**
+
+- **Named arguments only.** Every helper takes an options object whose keys are sent to Odoo **exactly** as Odoo's Python parameter names (`domain`, `fields`, `vals_list`, `allfields`, `ids`, …). There are no positional `params` and no `keyword`. Odoo rejects an unknown or misspelled name with `OdooValidationError`.
+- **Unset options are omitted**, so Odoo's own defaults apply. Don't pass `null` unless you mean Odoo's `None`.
+- **`create` always resolves to an array of ids**, even for a single record. Use `create_one` for a single id.
+- **The API key must be an Odoo API key**, not a password. On Odoo 20+ the key's scope must be `rpc` (the default). Keys of non-admin users expire. `instance.user_id` is not sent, because Odoo derives the user from the key.
+- **Context:** `init({ default_context })` is merged into every v2 call, and a call's own `context` keys win. It does not affect v1 calls. Odoo applies no company selection unless `allowed_company_ids` is sent.
+- **Multi-database hosts:** the database is selected by header and filtered by the server's `dbfilter`. If the host picks the database from the hostname, `instance.url` must be that database's own hostname. Otherwise v2 throws `Json2UnavailableError`.
+- **Binary fields on Odoo 20+** read as `{ content, filename?, size }` rather than a bare base64 string. This is an Odoo 20 change and applies to v1 too.
+
+| Helper | Odoo method | `kwargs` sent | `result` |
+|---|---|---|---|
+| `v2.search(model, { domain, offset?, limit?, order?, context? })` | `search` | same keys | `number[]` |
+| `v2.search_read(model, { domain?, fields?, offset?, limit?, order?, context? }?)` | `search_read` | same keys | records |
+| `v2.search_count(model, { domain, limit?, context? })` | `search_count` | same keys | `number` |
+| `v2.read(model, ids, { fields?, load?, context? }?)` | `read` | `ids` + keys | records |
+| `v2.fields_get(model, { allfields?, attributes?, context? }?)` | `fields_get` | same keys | object by field |
+| `v2.create(model, vals \| vals[], { context? }?)` | `create` | `vals_list` (always an array) | `number[]` |
+| `v2.create_one(model, vals, { context? }?)` | `create` | `vals_list: [vals]` | `number` |
+| `v2.write(model, ids, vals, { context? }?)` | `write` | `ids`, `vals` | `true` |
+| `v2.remove(model, ids, { context? }?)` | `unlink` | `ids` | `true` |
+| `v2.call_method(model, method, kwargs?)` | *method* | `kwargs` as given (`ids` only for record methods) | method's return |
+| `v2.version(url?)` | – | `POST /v2/odoo/version` | `{ version_info, version }` |
+| `v2.is_supported(url?)` | – | uses `v2.version` | `boolean` (cached) |
+
+Every v2 helper takes a trailing `opts?: { id?, timeoutSecs?, signal? }`. `id` sets the request id, which v1 takes positionally.
+
 ## Error Handling
 Every failure is **thrown** as a typed error — proxy-level failures (non-2xx) *and* Odoo logic errors (an `error` body on a `200`). On success the helper resolves to the envelope with `result` set. Use a single `try/catch`:
 
@@ -208,6 +273,21 @@ All errors extend `OdxError` and carry the JSON-RPC `code`, `message`, `data`, a
 | `InternalProxyError` | -32005 | Internal proxy error |
 | `LicenseError` | 0 | Proxy license expired/invalid (HTTP 403) |
 | `OdooLogicError` | *Odoo's code* | Odoo-side logic error returned on a 200 |
+| `Json2UnavailableError` | -32006 | **v2:** no JSON-2 on that Odoo (≤18, use v1), or the database is not selectable on that host (`dbfilter`) |
+| `InvalidRequestError` | -32007 | **v2:** invalid model/method name, or `db`/`api_key` not valid as an HTTP header (HTTP 400; Odoo not contacted) |
+
+For Odoo-side errors the proxy forwards Odoo's HTTP status as `code`. This always happens on v2, and on v1 only when Odoo itself answered with a non-2xx status. These errors are thrown as **subclasses of `OdooLogicError`**, so existing `instanceof OdooLogicError` checks still catch them:
+
+| Class | code | Meaning | Retry? |
+|---|---|---|---|
+| `OdooAuthError` | 401 | Odoo rejected the API key (invalid, expired, wrong scope, or a password). Distinct from `AuthError` (the proxy key) | no |
+| `OdooAccessError` | 403 | Access rights, or a private method | no |
+| `OdooNotFoundError` | 404 | Unknown model/method, or record does not exist | no |
+| `OdooConflictError` | 409 | Odoo lock conflict | yes, with backoff |
+| `OdooValidationError` | 422 | Validation/user error, or bad arguments | no |
+| `OdooServerError` | 5xx | Odoo server error | no |
+
+`OdooLogicError` also exposes `odooErrorName` (from `data.name`, e.g. `"odoo.exceptions.ValidationError"`) for finer branching. Never parse `data.debug`.
 
 Two behaviors worth knowing:
 
@@ -264,14 +344,17 @@ This repo uses Jest with two suites:
 
 - **Unit tests** (`__tests__/unit.test.ts`) mock `fetch` and need no credentials — run them anytime.
 - **Integration tests** (`__tests__/index.test.ts`) hit a real ODXProxy/Odoo instance and are **skipped unless `url` and `odx_api_key` are set**.
+- **v2 unit tests** (`__tests__/v2.unit.test.ts`) mock `fetch` and assert the exact `/v2/odoo/execute` wire shapes and error mapping.
+- **v2 live tests** (`__tests__/v2.live.test.ts`) need an ODXProxy **0.9.0+** in front of an Odoo **19+** instance. They are **skipped unless `v2_gateway_url` and `v2_odx_api_key` are set**. The suite creates one `res.partner` and deletes it.
 
 ```
-npm test                # both suites (integration skipped without creds)
-npx jest unit.test.ts   # unit tests only
+npm test                # all suites (live suites skipped without creds)
+npx jest unit.test.ts   # unit tests only (v1 + v2)
 ```
 
-Environment variables for the integration suite (loaded from `.env` by `jest.setup.ts`):
-- url, db, uid, api_key, odx_api_key
+Environment variables (loaded from `.env` by `jest.setup.ts`):
+- v1 integration: url, db, uid, api_key, odx_api_key (+ optional gateway_url)
+- v2 live: v2_gateway_url, v2_odx_api_key, v2_url, v2_db, v2_api_key
 
 ## Build
 Build the package (generates ESM, CJS, and type definitions):
@@ -283,7 +366,7 @@ npm run build
 Outputs are placed under `dist/` and are referenced via `exports` in package.json.
 
 ## Versioning
-This package follows semantic versioning when published to npm. Current version is defined in package.json.
+The package version tracks the ODXProxy server version. 0.9.x adds the `v2` API, which needs ODXProxy 0.9.0+. The v1 helpers work against any ODXProxy version.
 
 ## License
 MIT © 2025 TERRAKERNEL PTE. LTD.
