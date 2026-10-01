@@ -28,12 +28,9 @@ jobs:
       - name: Build
         run: npm run build
 
+      # Unit suites only. The live suites (index.test.ts, v2.live.test.ts) skip
+      # themselves when their env vars (url/odx_api_key, v2_gateway_url/v2_odx_api_key)
+      # are unset, so none are passed here: the gateway behind the TEST_* secrets is
+      # not reachable from CI. Run the live suites locally against a real proxy.
       - name: Run tests
-        env:
-          # Provide dummy env to prevent accidental real calls; tests that hit real services should be conditionally skipped
-          url: ${{secrets.TEST_URL}}
-          db: ${{secrets.TEST_DB}}
-          uid: ${{secrets.TEST_UID}}
-          api_key: ${{secrets.TEST_API_KEY}}
-          odx_api_key: ${{secrets.TEST_ODX_API_KEY}}
         run: npm test -- --ci --reporters=default --reporters=jest-junit
